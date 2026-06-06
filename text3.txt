@@ -1,0 +1,64 @@
+-- Services
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local DataStoreService = game:GetService("DataStoreService")
+
+-- Variables
+local DataStore = DataStoreService:GetDataStore("LeaderstatsData01")
+local CurrencyName = "Cash"
+
+-- Create Leaderstats
+local function Create(Player)
+    local Leaderstats = Instance.new("Folder", Player)
+    Leaderstats.Name = "leaderstats"
+    
+    local Currency = Instance.new("IntValue", Leaderstats)
+    Currency.Name = CurrencyName
+    Currency.Value = 0
+    
+    return Currency
+end
+
+-- Load Data
+local function LoadData(Player, Currency)
+    local Success, Data = pcall(function()
+        return DataStore:GetAsync(Player.UserId)
+    end)
+    
+    if (not Success) or (not Data) then
+        Currency.Value = 0
+        return
+    end
+    
+    Currency.Value = Data
+end
+
+-- Save Data
+local function SaveData(Player)
+    local Leaderstats = Player:FindFirstChild("leaderstats")
+    if (not Leaderstats) then return end
+    
+    local Currency = Leaderstats:FindFirstChild(CurrencyName)
+    if (not Currency) then return end
+    
+    pcall(function()
+        DataStore:SetAsync(Player.UserId, Currency.Value)
+    end)
+end
+
+-- Player Added
+Players.PlayerAdded:Connect(function(Player)
+    local Currency = Create(Player)
+    LoadData(Player, Currency)
+end)
+
+-- Player Removing
+Players.PlayerRemoving:Connect(function(Player)
+    SaveData(Player)
+end)
+
+game:BindToClose(function()
+    for _, Player in ipairs(Players:GetPlayers()) do
+        SaveData(Player)
+    end
+end)
