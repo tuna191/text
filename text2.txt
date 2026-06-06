@@ -1,0 +1,19 @@
+local Boards = {}
+Boards.UpdateTime = 1800 -- How often leaderboards update
+Boards.AnimationID = 82238508652742 -- The animation the top 3 players will play
+Boards.RankColors = { -- The color of the top 3 ranks
+    [1] = Color3.fromRGB(255, 227, 67),
+    [2] = Color3.fromRGB(198, 215, 255),
+    [3] = Color3.fromRGB(195, 144, 72),
+}
+
+Boards.Leaderboards = {
+    ["CashBoard"] = {
+        Datastore = "CashBoard_1", -- Change this to reset leaderboards
+        Currency = "Cash", -- The currency the leaderboard displays
+        
+        MaxPlayers = 50, -- Maximum players to display
+    },
+}
+
+return Boards
