@@ -1,0 +1,120 @@
+-- Services
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local DataStoreService = game:GetService("DataStoreService")
+local Players = game:GetService("Players")
+
+-- Variables
+local Leaderboards = workspace.Leaderboards
+
+-- Modules
+local Boards = require(ReplicatedStorage.Modules.Boards)
+
+-- Updates the podium character model for the top ranks
+local function UpdatePodium(Model, Rank, UserId)
+    local Podium = Model.Podiums:FindFirstChild(tostring(Rank))
+    if (not Podium) then return end
+    
+    local Rig = Podium:FindFirstChild("Rig")
+    if (not Rig) then return end
+    
+    local Humanoid = Rig:FindFirstChildOfClass("Humanoid")
+    if (not Humanoid) then return end
+    
+    -- Safely get the player's humanoid description (avatar outfit) using their UserId
+    local Success, Description = pcall(function()
+        return Players:GetHumanoidDescriptionFromUserIdAsync(UserId)
+    end)
+    
+    if (not Success) then warn(Description) end
+    Humanoid:ApplyDescription(Description)
+    
+    -- Plays a animation on the rig
+    local Animator = Humanoid:FindFirstChildOfClass("Animator") or Instance.new("Animator", Humanoid)
+    
+    local Animation = Instance.new("Animation")
+    Animation.AnimationId = "rbxassetid://" .. Boards.AnimationID
+    
+    local Track = Animator:LoadAnimation(Animation)
+    Track.Looped = true
+    Track.Play()
+end
+
+-- Saves each player's current leaderboard stat into the OrderedDataStore
+local function SetData(Board)
+    local BoardStats = Boards.Leaderboards[Board.Name]
+    if (not BoardStats) then return end
+    
+    local DataStore = DataStoreService:GetOrderedDataStore("Leaderboards", BoardStats.Datastore)
+    
+    for _, Player in Players:GetPlayers() do
+        local Leaderstats = Player:FindFirstChild("leaderstats")
+        if (not Leaderstats) then return end
+        
+        local Currency = Leaderstats:FindFirstChild(BoardStats.Currency)
+        if (not Currency) then return end
+        
+        local Success, Error = pcall(function()
+            DataStore:SetAsync(Player.UserId, Currency.Value)
+        end)
+        
+        if (not Success) then warn(Error) end
+    end
+end
+
+-- Updates the visual leaderboard board in the game world
+local function Update(Board)
+    local BoardStats = Boards.Leaderboards[Board.Name]
+    if (not BoardStats) then return end
+    
+    -- Get the ordered datastore and retrieve the highest values (top players)
+    local DataStore = DataStoreService:GetOrderedDataStore("Leaderboards", BoardStats.Datastore)
+    local Datas = DataStore:GetSortedAsync(false, BoardStats.MaxPlayers)
+    local CurrentPage = Datas:GetCurrentPage()
+    
+    local BoardFrame = Board.Board.Leaderboard.Main
+    for _, Frame in BoardFrame:GetChildren() do
+        if (not Frame:IsA("Frame")) then continue end
+        
+        Frame:Destroy()
+    end
+    
+    -- Loop through each ranked player and create a UI entry for them
+    for Rank, Value in ipairs(CurrentPage) do
+        local Template = ReplicatedStorage.Elements.Player:Clone()
+        
+        local Player = "Unknown"
+        local Success, Error = pcall(function()
+            Player = Players:GetNameFromUserIdAsync(Value.key)
+        end)
+        
+        if (not Success) then warn(Error) return end
+        if Rank <= 3 then UpdatePodium(Board, Rank, Value.key) end
+        
+        Template.LayoutOrder = tostring(Rank)
+        Template.Username.Text = string.upper(tostring(Player))
+        Template.Amount.Text = Value.value
+        Template.Rank.Text = "#" .. tostring(Rank)
+        
+        if Rank < 4 then
+            Template.Rank.TextColor3 = Boards.RankColors[Rank]
+        end
+        
+        Template.Parent = BoardFrame
+    end
+end
+
+-- Waits a few seconds for the game to load, then continuously updates all leaderboards
+task.delay(4, function()
+    while true do
+        for _, Board in Leaderboards:GetChildren() do
+            local Success, Error = pcall(function()
+                SetData(Board)
+                Update(Board)
+            end)
+            
+            if (not Success) then warn(Error) continue end
+        end
+        
+        task.wait(Boards.UpdateTime)
+    end
+end)
