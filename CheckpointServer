@@ -1,0 +1,48 @@
+-- Lấy dịch vụ "Players" để quản lý người chơi trong game
+local Players = game:GetService("Players")
+
+-- Tham chiếu tới thư mục chứa các Checkpoint trong Workspace
+local checkpoints = workspace.Checkpoints
+
+-- Lắng nghe sự kiện "PlayerAdded" (Kích hoạt khi có người chơi mới tham gia game)
+Players.PlayerAdded:Connect(function(player)
+
+	-- 1. Tạo một thư mục mới để chứa bảng điểm
+	local leaderstats = Instance.new("Folder")
+	leaderstats.Name = "leaderstats" -- Bắt buộc phải đặt tên chính xác là "leaderstats" thì Roblox mới hiện bảng điểm
+	leaderstats.Parent = player      -- Đưa thư mục này vào bên trong người chơi hiện tại
+
+	-- 2. Tạo một giá trị số nguyên để lưu số Màn (Stage) của người chơi
+	local stage = Instance.new("IntValue")
+	stage.Name = "Stage"  -- Tên cột hiển thị trên bảng điểm (Ví dụ: Stage)
+	stage.Value = 1       -- Mặc định khi mới vào game, người chơi sẽ ở Màn 1
+	stage.Parent = leaderstats -- Đưa giá trị này vào thư mục leaderstats vừa tạo ở trên
+
+end)
+
+-- Vòng lặp đi qua từng khối Checkpoint nằm trong thư mục Checkpoints
+for _, checkpoint in pairs(checkpoints:GetChildren()) do
+
+	-- Lắng nghe sự kiện "Touched" (Kích hoạt khi có vật gì đó chạm vào Checkpoint này)
+	checkpoint.Touched:Connect(function(hit)
+
+		-- Kiểm tra xem vật chạm vào (hit) có phải là một bộ phận của người chơi không
+		local player = Players:GetPlayerFromCharacter(hit.Parent)
+
+		-- Nếu đúng là người chơi chạm vào (chứ không phải cục gạch hay vật thể khác)
+		if player then
+			-- Tìm đến giá trị "Stage" trong bảng điểm của người chơi đó
+			local stage = player:WaitForChild("leaderstats").Stage
+
+			-- LOGIC CHỐNG GIAN LẬN: 
+			-- Kiểm tra nếu Tên của Checkpoint (chuyển sang dạng số) trừ đi 1 mà BẰNG với Stage hiện tại của người chơi
+			-- Ví dụ: Người chơi đang ở Màn 1 và chạm vào khối tên "2" -> (2 - 1 = 1) -> Hợp lệ!
+			if stage.Value == tonumber(checkpoint.Name) - 1 then
+
+				-- Cập nhật Stage của người chơi bằng với số của Checkpoint mới
+				stage.Value = tonumber(checkpoint.Name)
+
+			end
+		end
+	end)
+end
