@@ -1,0 +1,133 @@
+local Players = game:GetService("Players")
+local DataStoreService = game:GetService("DataStoreService")
+
+-- ĐÃ ĐỔI: Đổi tên kho lưu trữ thành "OrderedStages" để lưu số màn của người chơi
+local StageOrderedStore = DataStoreService:GetOrderedDataStore("OrderedStages")
+
+-- Tìm SurfaceGui chính
+local surfaceGui = script.Parent 
+if not surfaceGui:IsA("SurfaceGui") then
+	surfaceGui = workspace:FindFirstChild("GlobalLeaderboard", true)
+end
+
+-- Khai báo các khung UI
+local panelFrame = surfaceGui:WaitForChild("Panel")
+local loadFrame = panelFrame:WaitForChild("LoadFrame")
+local mainFrame = panelFrame:WaitForChild("MainFrame")
+
+local scrollFrame = mainFrame:WaitForChild("ScrollingFrame")
+local gridLayout = scrollFrame:WaitForChild("UIGridLayout")
+local slotTemplate = surfaceGui:WaitForChild("LeaderboardSlot")
+
+-- Board Args
+local smallestFirst = false
+local numberToShow = 100
+local min = 0
+local max = 10e30
+
+-- Hàm ẩn/hiện thông minh (Bất chấp đối tượng là SurfaceGui hay Frame)
+local function setUIElementsVisible(element, isVisible)
+	if element:IsA("SurfaceGui") or element:IsA("ScreenGui") then
+		element.Enabled = isVisible
+	else
+		element.Visible = isVisible
+	end
+end
+
+local function updateLeaderboard()
+
+	-- 1. Tự động lưu số Stage hiện tại của những người chơi trong server vào hệ thống
+	for i, plr in ipairs(Players:GetPlayers()) do
+		if plr.UserId < 1 then continue end
+
+		pcall(function()
+			-- ĐÃ ĐỔI: Kiểm tra xem người chơi có thư mục leaderstats và giá trị "Stage" không
+			if plr:FindFirstChild("leaderstats") and plr.leaderstats:FindFirstChild("Stage") then
+				local stageValue = plr.leaderstats.Stage.Value
+				if stageValue and stageValue >= min then
+					-- Lưu số Stage vào DataStore theo UserId
+					StageOrderedStore:SetAsync(plr.UserId, stageValue)
+				end
+			end
+		end)
+	end
+
+	-- 2. Bật màn hình Loading
+	setUIElementsVisible(mainFrame, false)
+	setUIElementsVisible(loadFrame, true)
+
+	-- Tạm thời nhấc gridLayout ra ngoài để xóa danh sách cũ không bị lỗi vị trí
+	gridLayout.Parent = script
+
+	for _, child in pairs(scrollFrame:GetChildren()) do
+		if child:IsA("Frame") or child:IsA("ImageLabel") or child:IsA("TextLabel") then
+			child:Destroy()
+		end
+	end
+
+	-- 3. Tải dữ liệu bảng xếp hạng Stage từ máy chủ dữ liệu Roblox
+	local success, pages = pcall(function()
+		return StageOrderedStore:GetSortedAsync(smallestFirst, numberToShow, min, max)
+	end)
+
+	if success and pages then
+		local leaderboardData = pages:GetCurrentPage()
+
+		for rank, plrData in pairs(leaderboardData) do
+			local userID = plrData.key
+			local stageValue = plrData.value
+			local name = "[FAILED TO LOAD]"
+
+			-- Lấy tên người chơi từ UserId
+			pcall(function()
+				name = Players:GetNameFromUserIdAsync(userID)
+			end)
+
+			-- Tạo bản sao dòng điểm từ mẫu LeaderboardSlot
+			local newSlot = slotTemplate:Clone()
+			newSlot.Name = tostring(userID)
+			newSlot.LayoutOrder = rank
+
+			-- Bắn dữ liệu vào chính xác 3 ô Label của bạn
+			if newSlot:FindFirstChild("NameLabel") then newSlot.NameLabel.Text = name end
+			if newSlot:FindFirstChild("RankLabel") then newSlot.RankLabel.Text = "#" .. rank end
+
+			-- ĐÃ ĐỔI: Hiển thị chữ "Màn" hoặc "Stage" thay vì "Coins/Vàng"
+			if newSlot:FindFirstChild("ScoreLabel") then 
+				newSlot.ScoreLabel.Text = "Màn " .. tostring(stageValue) 
+			end
+
+			newSlot.Parent = scrollFrame
+
+			-- Tự động đổi màu chữ cho các thứ hạng Top 1, 2, 3
+			if newSlot:FindFirstChild("RankLabel") then
+				local rankColor = newSlot.RankLabel.TextColor3
+				if rank == 1 then
+					rankColor = Color3.fromRGB(255, 187, 28)  -- Vàng Gold
+				elseif rank == 2 then
+					rankColor = Color3.fromRGB(182, 196, 209) -- Bạc
+				elseif rank == 3 then
+					rankColor = Color3.fromRGB(170, 71, 32)  -- Đồng
+				end
+				newSlot.RankLabel.TextColor3 = rankColor
+			end
+		end
+	else
+		warn("Không thể kết nối hoặc lấy dữ liệu từ OrderedDataStore!")
+	end
+
+	-- 4. Hoàn tất tải: Ẩn loading và hiển thị danh sách xếp hạng chính
+	setUIElementsVisible(mainFrame, true)
+	setUIElementsVisible(loadFrame, false)
+
+	-- Trả lại UIGridLayout về vị trí cũ trong ScrollingFrame
+	gridLayout.Parent = scrollFrame
+end
+
+-- Chờ có ít nhất 1 người chơi để bắt đầu chạy vòng lặp cập nhật
+repeat task.wait(2) until #Players:GetPlayers() >= 1
+
+while true do
+	updateLeaderboard()
+	task.wait(25) -- Cứ sau 25 giây bảng đen sẽ tự quét và cập nhật số checkpoint mới một lần
+end
