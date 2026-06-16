@@ -1,0 +1,24 @@
+local Players = game:GetService("Players")
+
+Players.PlayerAdded:Connect(function(player)
+
+	-- give coins value
+	local leaderstatsFolder = Instance.new("Folder", player)
+	leaderstatsFolder.Name = "leaderstats"
+
+	-- ĐÃ SỬA: Chuyển NumberValue thành IntValue để OrderedDataStore chấp nhận lưu dữ liệu
+	local Coins = Instance.new("IntValue", leaderstatsFolder)
+	Coins.Name = "Coins"
+
+	-- Sử dụng task.spawn để vòng lặp chạy độc lập, không chặn luồng kết thúc của player
+	task.spawn(function()
+		while task.wait(1) do
+			if player:IsDescendantOf(Players) then -- Kiểm tra xem người chơi còn trong game không
+				Coins.Value += 1
+			else
+				break
+			end
+		end
+	end)
+
+end)
